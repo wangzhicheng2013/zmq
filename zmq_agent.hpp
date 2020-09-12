@@ -3,9 +3,11 @@
 #include <string.h>
 #include <string>
 #include <map>
+#include <memory>
 #include "zmq.h"
 namespace zmq_self_agent {
 using namespace std;
+auto delete_context = [] (void *p) { if (p) { zmq_ctx_destroy(p); p = nullptr; }};
 enum {
 	BIND,
 	CONNECT
@@ -38,7 +40,6 @@ public:
 class zmq_agent {
 public:
 	zmq_agent() {
-		context_ = nullptr;
 		socket_ = nullptr;
 		init_map();
 	}
@@ -46,10 +47,6 @@ public:
 	    if (nullptr != socket_) {
 	        zmq_close(socket_);
 	        socket_= nullptr;
-	    }
-	    if (nullptr != context_) {
-	        zmq_ctx_destroy(context_);
-	        context_ = nullptr;
 	    }
 	}
 public:
@@ -119,10 +116,10 @@ private:
 		sock_type_map_[ZMQ_SUB] = CONNECT;
 	}
 	inline unsigned char init_socket(const zmq_config &config) {
-		if (nullptr == (context_ = zmq_ctx_new())) {
+		if (nullptr == s_context) {
 			return CONTEXT_ERROR;
 		}
-	    if (nullptr == (socket_ = zmq_socket(context_, config.sock_type))) {
+	    if (nullptr == (socket_ = zmq_socket(s_context.get(), config.sock_type))) {
 	    	return SOCKET_ERROR;
 	    }
 	    return NO_ERROR;
@@ -162,11 +159,12 @@ private:
 	    return NO_ERROR;
 	}
 private:
-    void *context_;
+	static std::unique_ptr<void, decltype(delete_context)>s_context;
     void *socket_;
 private:
     map<unsigned char, unsigned char>sock_type_map_;
 };
+std::unique_ptr<void, decltype(delete_context)>zmq_agent::s_context(zmq_ctx_new(), delete_context);
 }
  
 #endif /* SRC_ZMQ_AGENT_HPP_ */
